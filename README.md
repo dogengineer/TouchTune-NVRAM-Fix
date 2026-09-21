@@ -1,92 +1,247 @@
-# TouchTune by Miatafy
+# TouchTune — Fix NVRAM per Mazda Connect 74.00.324A
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
-[![Release: v1.2.0](https://img.shields.io/badge/release-v1.2.0-brightgreen.svg)](VERSION)
+[![Firmware](https://img.shields.io/badge/Mazda%20Connect-74.00.324A-brightgreen.svg)](VERSION)
 
-TouchTune keeps the Mazda Connect touchscreen enabled while the car is moving.
-It is a free, open-source USB installer for **Gen 6 Mazda Connect
-74.00.324 / 74.00.324A**. There is no account, desktop app, or configuration.
+Questa repository contiene una modifica di **TouchTune by Miatafy** per mantenere
+attivo il touchscreen di Mazda Connect durante la marcia.
+
+Il progetto originale supporta Mazda Connect Gen 6 con firmware
+**74.00.324 / 74.00.324A**.
+
+Questa versione introduce inoltre un fix per un problema riscontrato su una CMU
+reale con firmware **EU 74.00.324A**, nella quale le chiavi NVRAM utilizzate per
+la limitazione del touchscreen non erano inizialmente presenti.
+
+Il fix è stato **testato con successo su vettura reale**.
+
+> Il progetto originale TouchTune è sviluppato da Miatafy.
+> Questa repository mantiene i relativi crediti e la licenza GPL-3.0-or-later.
 
 ![TouchTune install prompt on Mazda Connect](docs/touchtune-install-prompt.png)
 
-## Install
 
-1. Check your firmware in **Settings → System → About**. It must be
-   **74.00.324** or **74.00.324A**. See the [firmware guide](https://miatafy.com/mazda-connect/check-firmware/).
-2. Prepare an empty USB stick formatted **FAT32 with an MBR partition map**.
-   [USB requirements](https://miatafy.com/support/usb-requirements/)
-3. Extract the release ZIP onto the USB root. From a source checkout, copy the
-   **contents** of `usb/`, including the unusually named `.up` file. Do not merge
-   releases or copy the enclosing folder.
-4. Eject the stick. On macOS, run the helper included in the release:
-   `sh /Volumes/NAME/macos-usb-eject.sh /Volumes/NAME`. It removes Finder
-   sidecars, checks the installer files, and ejects the stick. From a source
-   checkout, run `sh macos-usb-eject.sh /Volumes/NAME` instead.
-5. With the car on, insert the stick and choose **INSTALL** when the TouchTune
-   dialog appears. Leave it connected while installation runs.
-6. Remove the USB when the completion message asks you to. Mazda Connect restarts
-   to load the change.
+## Scopo del progetto
 
-Keep the USB: the same stick can repair or remove TouchTune later.
+Questo repository documenta, a scopo didattico e di ricerca tecnica, l'analisi
+di un comportamento delle impostazioni NVRAM di Mazda Connect 74.00.324A e una
+modifica sperimentale al progetto open-source TouchTune.
 
-> The `$(...).up` filename is how the Mazda update scanner starts the installer.
-> Copy it along with the other files; do not type its name into a shell.
+Il materiale è pubblicato esclusivamente per documentare l'analisi tecnica e
+il relativo fix. Non costituisce documentazione ufficiale Mazda e non è
+destinato a essere utilizzato come guida per modificare veicoli o sistemi
+infotainment in uso.
 
-## Repair or remove
+La modifica delle impostazioni della CMU può alterare limitazioni previste dal
+costruttore e comportare rischi, inclusa la distrazione durante la guida.
 
-Insert the same USB again. Choose **REPAIR** to reapply TouchTune, **REMOVE** to
-restore its original file and settings, or **CANCEL** to leave things as they are.
+Per le istruzioni di utilizzo e la documentazione del progetto originale si
+rimanda a TouchTune by Miatafy.
 
-TouchTune changes only `Common.js` and the two factory speed-restriction settings.
-Its backup lives under `/data/touchtune/backups/common-js`. It does not restore
-files from other tweaks or use ScreenTune's backups. An exact TouchTune 1.1
-installation can be upgraded or removed with this USB.
 
-## If installation stops
+## Il problema
 
-Read the on-screen message and keep `touchtune.log` from the USB. A damaged
-download, unsupported firmware, an unexpected `Common.js`, or an invalid backup
-stops installation. A failed install does not request a restart.
+TouchTune gestisce due impostazioni NVRAM relative alle limitazioni
+dell'interfaccia durante il movimento del veicolo:
 
-For a USB validation error, prepare a fresh stick from the release ZIP. If the log
-reports an unexpected system file or backup, preserve it for diagnosis rather
-than replacing files on the CMU. If no dialog appears, check the USB layout and
-remove other USB storage devices before trying again.
+    bus_bcm_speed_restriction
+    lvds_speed_restriction
 
-## What changed in 1.2
+Sulla CMU utilizzata durante l'attività sperimentale queste impostazioni
+non erano inizialmente presenti.
 
-The installer now builds and checks a complete replacement before touching the
-live file. It saves a private, verified backup, checks that setting changes took
-effect, and rolls back a failed transaction. Cleanup restores the watchdog and
-read-only root mount before requesting Mazda's managed restart.
+La versione originale di TouchTune interpretava questa condizione come
+un errore e interrompeva l'operazione prima di applicare la modifica.
 
-These changes address cases where the old installer could report success after
-an incomplete write. They cannot make failing storage or power loss harmless.
-See the [changelog](CHANGELOG.md) and [developer notes](SAFETY.md) for details.
+L'analisi tecnica ha mostrato che l'assenza iniziale delle relative chiavi
+NVRAM non rappresenta necessariamente una condizione anomala e che il
+software della CMU è in grado di gestire la loro configurazione anche
+quando non sono ancora presenti.
 
-## Compatibility
 
-TouchTune supports the Gen 6 `74.00.324` / `74.00.324A` firmware family and the
-exact stock or TouchTune-patched `Common.js` described in the developer notes.
-It refuses other versions and unknown modifications to that file. The About
-screen sometimes omits the trailing `A`.
+## Analisi tecnica
 
-The inspected NA and EU firmware copies contain the same supported file. Bench
-testing uses a 2019 CX-5 CMU with NA 74.00.324A; this does not establish support
-for every vehicle or region. [Vehicle compatibility](https://miatafy.com/compatibility/supported-vehicles/)
+Per comprendere il comportamento osservato è stata effettuata un'analisi
+tecnica del firmware Mazda Connect EU 74.00.324A.
 
-## Contributing
+L'analisi è stata utilizzata esclusivamente per comprendere il funzionamento
+delle impostazioni NVRAM interessate e verificare il comportamento previsto
+dal sistema.
 
-The installer is shell code in `usb/install-patches.sh`,
-`usb/patches/touch-while-driving.sh`, and `usb/lib/touchtune-helpers.sh`.
-Run `./tests/run.sh` for disposable host tests. The [developer notes](SAFETY.md)
-explain file replacement, backups, packaging, and bench validation.
-The [1.2 bench report](docs/bench-validation-2026-09-09.md) records the tested
-package and install/removal results.
+Il firmware Mazda, le immagini del filesystem e gli altri file proprietari
+esaminati durante l'attività di ricerca non sono inclusi né distribuiti da
+questo repository.
 
-## License
+L'analisi ha permesso di stabilire che il problema non era causato
+dall'impossibilità della CMU di configurare le impostazioni, ma dal controllo
+preliminare effettuato da TouchTune quando le relative chiavi NVRAM non
+risultavano ancora leggibili.
 
-GPL-3.0-or-later, with no warranty. TouchTune builds on the Mazda Connect
-community's MZD-AIO work; see [LICENSE](LICENSE), [NOTICE](NOTICE), and
-[DISCLAIMER.md](DISCLAIMER.md). It disables a factory speed lockout: understand
-the change and keep your attention on driving.
+
+## Il fix
+
+Il fix modifica esclusivamente la gestione di questa particolare condizione
+all'interno di TouchTune.
+
+Quando una delle due chiavi NVRAM non è presente, il suo stato iniziale viene
+considerato equivalente allo stato:
+
+    enable
+
+La stessa logica viene applicata durante il controllo di preflight precedente
+alla modifica.
+
+In questo modo l'assenza iniziale della chiave non viene interpretata
+automaticamente come un errore e il sistema può procedere con il normale
+meccanismo di configurazione.
+
+Le altre verifiche previste da TouchTune rimangono invariate.
+
+
+## Verifica di Common.js
+
+Durante l'attività di analisi è stato verificato anche il file `Common.js`
+corrispondente alla versione firmware studiata.
+
+SHA-256 del file originale verificato:
+
+    376b30a46366a543122956d7feb1b44f147425015837a4d83fedf12a67943351
+
+Il valore coincide con `MZD_PROFILE_STOCK_SHA256` previsto dal progetto
+TouchTune.
+
+Applicando la trasformazione prevista da TouchTune si ottiene:
+
+    019eba18e8d629ddb1d55563aab138ce1eb3329fab67b71d9b4178377cf9d9ce
+
+Questo valore coincide con `MZD_PROFILE_PATCHED_SHA256` previsto da TouchTune.
+
+Gli hash vengono riportati esclusivamente per identificare e documentare
+la versione del file utilizzata durante la verifica. Il file originale
+`Common.js` non è incluso né distribuito da questo repository.
+
+
+## Analisi tecnica completa
+
+Una descrizione più dettagliata dell'attività di analisi e del problema
+individuato è disponibile in:
+
+**[Analisi del fix per Mazda Connect 74.00.324A](docs/FIX_74.00.324A_IT.md)**
+
+Il documento descrive:
+
+- il comportamento osservato sulla CMU utilizzata per il test;
+- l'analisi delle impostazioni NVRAM interessate;
+- la verifica di `Common.js` mediante SHA-256;
+- la causa dell'interruzione della versione originale di TouchTune;
+- la modifica apportata alla gestione delle chiavi NVRAM mancanti;
+- il risultato dell'attività sperimentale.
+
+Il documento non contiene né distribuisce firmware Mazda, immagini della
+RootFS o altri file proprietari del sistema.
+
+
+## Compatibilità
+
+TouchTune originale è progettato per la famiglia firmware Gen 6:
+
+    74.00.324
+    74.00.324A
+
+Il fix documentato in questa repository è stato verificato direttamente con:
+
+    Mazda Connect EU 74.00.324A
+
+Non è possibile garantire che tutte le varianti hardware, regionali o firmware
+si comportino nello stesso modo.
+
+L'installer mantiene inoltre i controlli sull'hash di `Common.js` e rifiuta file
+non riconosciuti.
+
+
+## Differenze rispetto a TouchTune 1.2.0
+
+La modifica principale è contenuta in:
+
+    usb/patches/touch-while-driving.sh
+
+Rispetto a TouchTune 1.2.0:
+
+1. una speed-restriction NVRAM assente viene interpretata come stato iniziale
+   `enable`;
+2. il controllo di preflight applica la stessa interpretazione;
+3. gli script originali Mazda possono quindi creare la chiave durante
+   l'impostazione a `disable`.
+
+Il resto del meccanismo TouchTune, inclusi backup, verifica di `Common.js`,
+controllo delle scritture e rollback, rimane invariato.
+
+
+## Sviluppo
+
+I file principali dell'installer sono:
+
+    usb/install-patches.sh
+    usb/patches/touch-while-driving.sh
+    usb/lib/touchtune-helpers.sh
+
+Per i test host:
+
+    ./tests/run.sh
+
+Ulteriori informazioni sul funzionamento originale di TouchTune sono disponibili
+in:
+
+    SAFETY.md
+    CHANGELOG.md
+    DISCLAIMER.md
+
+
+## Sicurezza
+
+La modifica disabilita una limitazione prevista dal costruttore.
+
+L'utilizzo del touchscreen durante la guida può distrarre il conducente.
+Utilizzare il sistema in modo responsabile e nel rispetto delle norme applicabili.
+
+La modifica del software della CMU comporta inoltre un rischio: verificare
+sempre firmware, file e backup prima di procedere.
+
+
+## Crediti
+
+### TouchTune
+
+Progetto originale:
+
+**Miatafy — TouchTune**
+
+https://github.com/Miatafy/TouchTune
+
+TouchTune deriva inoltre dal lavoro della comunità Mazda Connect / MZD-AIO.
+
+
+### Fix NVRAM 74.00.324A
+
+Questo fix nasce dall'analisi del firmware Mazda Connect EU 74.00.324A e dal
+debugging del comportamento delle chiavi:
+
+    bus_bcm_speed_restriction
+    lvds_speed_restriction
+
+L'analisi ha permesso di verificare il comportamento degli script originali
+Mazda e di adattare TouchTune al caso in cui tali chiavi non siano ancora
+presenti.
+
+
+## Licenza
+
+GPL-3.0-or-later.
+
+Consultare:
+
+- [LICENSE](LICENSE)
+- [NOTICE](NOTICE)
+- [DISCLAIMER.md](DISCLAIMER.md)
+
+Il software viene fornito senza garanzia.

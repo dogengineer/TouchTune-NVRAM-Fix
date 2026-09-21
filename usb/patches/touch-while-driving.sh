@@ -34,12 +34,12 @@ if ! mzd_validate_target_common "$MZD_COMMON_TARGET" "$ENTRY_COMMON_STATE"; then
     return 1
 fi
 if ! ENTRY_BUS_STATE=$(mzd_read_nvram bus_bcm_speed_restriction); then
-    mzd_log "ERROR: bus_bcm_speed_restriction cannot be reliably read; nothing was changed"
-    return 1
+    ENTRY_BUS_STATE=enable
+    mzd_log "WARN: bus_bcm_speed_restriction missing; assuming factory state enable"
 fi
 if ! ENTRY_LVDS_STATE=$(mzd_read_nvram lvds_speed_restriction); then
-    mzd_log "ERROR: lvds_speed_restriction cannot be reliably read; nothing was changed"
-    return 1
+    ENTRY_LVDS_STATE=enable
+    mzd_log "WARN: lvds_speed_restriction missing; assuming factory state enable"
 fi
 if ! mzd_require_nvram_setters; then
     mzd_log "ERROR: required NVRAM setters are unavailable; nothing was changed"
@@ -80,9 +80,12 @@ if [ "$ENTRY_COMMON_STATE" != "$WANTED_COMMON_STATE" ]; then
     fi
 fi
 # Revalidate the entry state immediately before the first managed write.
+PREFLIGHT_BUS_STATE=$(mzd_read_nvram bus_bcm_speed_restriction 2>/dev/null || printf '%s\n' enable)
+PREFLIGHT_LVDS_STATE=$(mzd_read_nvram lvds_speed_restriction 2>/dev/null || printf '%s\n' enable)
+
 if ! mzd_validate_target_common "$MZD_COMMON_TARGET" "$ENTRY_COMMON_STATE" || \
-    [ "$(mzd_read_nvram bus_bcm_speed_restriction 2>/dev/null)" != "$ENTRY_BUS_STATE" ] || \
-    [ "$(mzd_read_nvram lvds_speed_restriction 2>/dev/null)" != "$ENTRY_LVDS_STATE" ]; then
+    [ "$PREFLIGHT_BUS_STATE" != "$ENTRY_BUS_STATE" ] || \
+    [ "$PREFLIGHT_LVDS_STATE" != "$ENTRY_LVDS_STATE" ]; then
     mzd_log "ERROR: managed entry state changed during preflight; refusing to continue"
     return 1
 fi
